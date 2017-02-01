@@ -1,4 +1,5 @@
 #include <sys/ptrace.h>
+#include <asm/ptrace.h>
 #include <bits/types.h>
 #include <sys/user.h>
 #include <sys/wait.h>
@@ -12,13 +13,6 @@
 
 #include "syscalls.h"
 #include "syscallents.h"
-
-/* cheap trick for reading syscall number / return value. */
-#ifdef __amd64__
-#define eax rax
-#define orig_eax orig_rax
-#else
-#endif
 
 #define offsetof(a, b) __builtin_offsetof(a,b)
 #define get_reg(child, name) __get_reg(child, offsetof(struct user, regs.name))
@@ -56,21 +50,12 @@ const char *syscall_name(int scn) {
 
 long get_syscall_arg(pid_t child, int which) {
     switch (which) {
-#ifdef __amd64__
-    case 0: return get_reg(child, rdi);
-    case 1: return get_reg(child, rsi);
-    case 2: return get_reg(child, rdx);
-    case 3: return get_reg(child, r10);
-    case 4: return get_reg(child, r8);
-    case 5: return get_reg(child, r9);
-#else
-    case 0: return get_reg(child, ebx);
-    case 1: return get_reg(child, ecx);
-    case 2: return get_reg(child, edx);
-    case 3: return get_reg(child, esi);
-    case 4: return get_reg(child, edi);
-    case 5: return get_reg(child, ebp);
-#endif
+    case 0: return get_reg(child, ARM_r0);
+    case 1: return get_reg(child, ARM_r1);
+    case 2: return get_reg(child, ARM_r2);
+    case 3: return get_reg(child, ARM_r3);
+    case 4: return get_reg(child, ARM_r4);
+    case 5: return get_reg(child, ARM_r5);
     default: return -1L;
     }
 }
@@ -113,7 +98,7 @@ void print_syscall_args(pid_t child, int num) {
         int type = ent ? ent->args[i] : ARG_PTR;
         switch (type) {
         case ARG_INT:
-            fprintf(stderr, "%ld", arg);
+            fprintf(stderr, "%u", arg);
             break;
         case ARG_STR:
             strval = read_string(child, arg);
@@ -131,7 +116,7 @@ void print_syscall_args(pid_t child, int num) {
 
 void print_syscall(pid_t child, int syscall_req) {
     int num;
-    num = get_reg(child, orig_eax);
+    num = get_reg(child, ARM_r7);
     assert(errno == 0);
 
     fprintf(stderr, "%s(", syscall_name(num));
@@ -166,7 +151,7 @@ int do_trace(pid_t child, int syscall_req) {
         if (wait_for_syscall(child) != 0)
             break;
 
-        retval = get_reg(child, eax);
+        retval = get_reg(child, ARM_r0);
         assert(errno == 0);
 
         fprintf(stderr, "%d\n", retval);

@@ -6,17 +6,20 @@ import subprocess
 
 def do_syscall_numbers(unistd_h):
     syscalls = {}
+    number = 0
     for line in open(unistd_h):
-        m = re.search(r'^#define\s*__NR_(\w+)\s*(\d+)', line)
+        m = re.search(r'CALL[A-Z\(]*sys_(\w+)[\),]', line)
         if m:
-            (name, number) = m.groups()
-            number = int(number)
+            name = m.groups()[0]
             syscalls[number] = name
+            number += 1
 
     return syscalls
 
 def process_define(syscalls, text):
     (name, types) = None, None
+    if text.startswith('COMPAT'):
+        return
     if text.startswith('SYSCALL_DEFINE('):
         m = re.search(r'^SYSCALL_DEFINE\(([^)]+)\)\(([^)]+)\)$', text)
         if not m:
@@ -40,9 +43,9 @@ def process_define(syscalls, text):
 def find_args(linux):
     syscalls = {}
     find = subprocess.Popen(["find"] +
-                             [os.path.join(linux, d) for d in
-                              "arch/x86 fs include ipc kernel mm net security".split()] +
-                            ["-name", "*.c", "-print"],
+                            [os.path.join(linux, d) for d in
+                                "arch/x86 fs include ipc kernel mm net security".split()] +
+                                ["-name", "*.c", "-print"],
                             stdout = subprocess.PIPE)
     for f in find.stdout:
         fh = open(f.strip())
@@ -96,10 +99,7 @@ def main(args):
         print >>sys.stderr, "Usage: %s /path/to/linux-2.6" % (sys.argv[0],)
         return 1
     linux_dir = args[0]
-    if os.uname()[4] == 'x86_64':
-        unistd_h = "arch/x86/include/asm/unistd_64.h"
-    else:
-        unistd_h = "arch/x86/include/asm/unistd_32.h"
+    unistd_h = "arch/arm/kernel/calls.S"
 
     syscall_numbers = do_syscall_numbers(os.path.join(linux_dir, unistd_h))
     syscall_types   = find_args(linux_dir)
